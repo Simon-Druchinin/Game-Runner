@@ -1,7 +1,7 @@
 import os
 import sys
 from typing import NoReturn
-import time
+from random import randint
 
 import pygame
 
@@ -14,7 +14,7 @@ pygame.display.set_caption(GAME_NAME)
 
 clock = pygame.time.Clock()
 
-class Player(pygame.sprite.Sprite):
+class Player():
     run_animation = [pygame.image.load(os.path.join('images\player_run', f"{x}.png")) for x in range (1, 9)]
     jump_animation = [pygame.image.load(os.path.join('images\player_jump', f"{x}.png")) for x in range (1, 8)]
     slide_animation = [pygame.image.load(os.path.join('images\player_slide', f"{x}.png")) for x in range (1, 2)]
@@ -25,24 +25,25 @@ class Player(pygame.sprite.Sprite):
                  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-2,-2,-2,-2,-2,-2,-2,-2,-2,-2,-2,-2,-3,-3,-3,
                  -3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4]
 
-    def __init__(self, width, height):
-        self.width = width
-        self.height = height
+    def __init__(self):
         self.x, self.y = [200, 313]
+        self.width = 64
+        self.height = 64
 
         self.count = 0
         self.is_dead = False
         self.action = "running"
         
-    def draw_run(self):
+    def draw_run(self, screen):
         if int(self.count) > 95:
             self.count = 0
             self.x, self.y = [200, 313]
 
         screen.blit(self.run_animation[int(self.count)//12], (self.x,self.y))
         self.count += 1
-    
-    def draw_jump(self):
+        self.hitbox = (self.x+ 4, self.y, self.width-24, self.height-13)
+
+    def draw_jump(self, screen):
         if int(self.count) > 144:
             self.count = 0
             self.action = "running"
@@ -51,10 +52,15 @@ class Player(pygame.sprite.Sprite):
         
         screen.blit(self.jump_animation[int(self.count)//21], (self.x,self.y))
         self.count += 1
+        self.hitbox = (self.x+4, self.y, self.width-24, self.height-10)
 
-    def draw_slide(self):
+    def draw_slide(self, screen):
         if self.count < 22:
             self.y += 1
+            self.hitbox = (self.x+ 4, self.y, self.width-24, self.height-10)
+
+        elif self.count > 22 and self.count < 160:
+            self.hitbox = (self.x, self.y+3, self.width-8, self.height-35)
 
         elif self.count == 160:
             self.y -= 21
@@ -66,7 +72,48 @@ class Player(pygame.sprite.Sprite):
         screen.blit(self.slide_animation[self.count//18], (self.x, self.y))
         self.count += 1
 
-player = Player(64, 64)
+class Saw():
+    saw_animation = [pygame.image.load(os.path.join('images\saw', f"{x}.png")) for x in range (1, 5)]
+
+    def __init__(self):
+        self.x = 810
+        self.y = 310
+        self.width = 64
+        self.height = 64
+        self.count = 0
+    
+    def draw(self, screen):
+        self.hitbox = (self.x + 10, self.y + 5, self.width - 20, self.height - 5)
+        if self.count >= 8:
+            self.count = 0
+        screen.blit(pygame.transform.scale(self.saw_animation[self.count//2], (64,64)), (self.x,self.y))
+        self.count += 1
+        self.x -=1
+    
+    def collide(self, rect):
+        if rect[0] + rect[2] > self.hitbox[0] and rect[0] < self.hitbox[0] + self.hitbox[2]:
+            if rect[1] + rect[3] > self.hitbox[1]:
+                return True
+        return False
+
+class Spike():
+    spike = pygame.image.load(os.path.join('images', 'spike.png'))
+
+    def __init__(self):
+        self.x = 810
+        self.y = 0
+
+    def draw(self, win):
+        self.hitbox = (self.x + 10, self.y, 28, 315)
+        win.blit(self.spike, (self.x, self.y))
+        self.x -=1
+
+    def collide(self, rect):
+        if rect[0] + rect[2] > self.hitbox[0] and rect[0] < self.hitbox[0] + self.hitbox[2]:
+            if rect[1] < self.hitbox[3]:
+                return True
+        return False
+
 
 class Background(pygame.sprite.Sprite):
     def __init__(self, image_file, location):
@@ -75,19 +122,23 @@ class Background(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.x, self.rect.y = location
 
-        self.counter = 0
-
     def slide(self):
         if self.rect.x <= self.image.get_width() * -1:
             self.rect.x = self.image.get_width()
         self.rect.x -= 1
 
-
-
+#Class instances
+player = Player()
 bg_1 = Background('images/bg.png', [0, 0])
 bg_2 = Background('images/bg.png', [bg_1.image.get_width(), 0])
 
-def redraw_window(player):
+#Make timer for events
+speed_event = pygame.USEREVENT + 1
+obstacle_event = pygame.USEREVENT + 2
+pygame.time.set_timer(speed_event , 500)
+pygame.time.set_timer(obstacle_event , 2000)
+
+def redraw_window(player, obstacles):
     #Move a background
     screen.fill(BLACK)
     screen.blit(bg_1.image, bg_1.rect)
@@ -95,19 +146,41 @@ def redraw_window(player):
     bg_1.slide()
     bg_2.slide()
 
-    #draw a player actiob
+    #draw a player action
     draw_player_action = {
         "running": player.draw_run,
         "jumping": player.draw_jump,
         "sliding": player.draw_slide,
-    }[player.action]()
+    }[player.action](screen)
+
+    #draw obstacles
+    for obstacle in obstacles:
+        obstacle.draw(screen)
+        if obstacle.collide(player.hitbox):
+            player.is_dead = True
+
+    for num, obstacle in enumerate(obstacles):
+        if obstacle.x <= -64:
+            obstacles.pop(num)
 
     pygame.display.update()
 
+#game variables
+obstacles = []
+
 while not player.is_dead:
+    #game events
     for event in pygame.event.get():
         if event.type == pygame.QUIT: sys.exit()
 
+        if event.type == speed_event:
+            SPEED += 1
+        
+        if event.type == obstacle_event:
+            obstacle_types = [Saw(), Spike()]
+            obstacles.append(obstacle_types[randint(0, 1)])
+
+    #player movements
     keys = pygame.key.get_pressed()
 
     if (keys[pygame.K_SPACE] or keys[pygame.K_UP]) and player.action == "running":
@@ -119,5 +192,4 @@ while not player.is_dead:
         player.action = "sliding"
 
     clock.tick(SPEED)
-    redraw_window(player)
-    
+    redraw_window(player, obstacles)

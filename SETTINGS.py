@@ -7,4 +7,4 @@ BLACK = [0, 0, 0]
 
 #Game Preferences
 GAME_NAME = "Бегун"
-SPEED = 80
+SPEED = 180
