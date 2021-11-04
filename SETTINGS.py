@@ -8,3 +8,4 @@ BLACK = [0, 0, 0]
 #Game Preferences
 GAME_NAME = "Бегун"
 SPEED = 180
+OBSTACLE_TICKRATE = 1000
