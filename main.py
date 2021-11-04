@@ -1,14 +1,14 @@
 import os
 import sys
 import time
-from typing import NoReturn
+import json
 from random import randint
+from functools import reduce
 
 import pygame
 import pygame_menu
 
 from SETTINGS import *
-from menu import call_menu
 
 
 pygame.init()
@@ -28,6 +28,17 @@ class Player():
                  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-2,-2,-2,-2,-2,-2,-2,-2,-2,-2,-2,-2,-3,-3,-3,
                  -3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4]
 
+    @staticmethod
+    def get_sorted_list_of_players_records(PLAYER_SCORE_JSON_PATH: str) -> list:
+        if os.stat(PLAYER_SCORE_JSON_PATH).st_size:
+            with open(PLAYER_SCORE_JSON_PATH, 'r', encoding='utf-8') as read_file:
+                data = json.load(read_file)
+                players_records = sorted(data, key=lambda x: x[list(x.keys())[0]], reverse=True)
+        else:
+            players_records = []
+        
+        return players_records
+        
     def __init__(self):
         self.x, self.y = [200, 313]
         self.width = 64
@@ -38,8 +49,9 @@ class Player():
         self.action = "running"
 
         self.score = 0
+        self.name = "Игрок1"
 
-        self.hitbox = (self.x+ 4, self.y, self.width-24, self.height-13)
+        self.hitbox = (self.x+4, self.y, self.width-24, self.height-13)
     
     def draw_death(self, screen):
         self.y = 340
@@ -66,7 +78,7 @@ class Player():
 
         screen.blit(self.run_animation[int(self.count)//12], (self.x,self.y))
         self.count += 1
-        self.hitbox = (self.x+ 4, self.y, self.width-24, self.height-13)
+        self.hitbox = (self.x+4, self.y, self.width-24, self.height-13)
 
     def draw_jump(self, screen):
         if int(self.count) > 153:
@@ -97,8 +109,27 @@ class Player():
         screen.blit(self.slide_animation[self.count//18], (self.x, self.y))
         self.count += 1
     
-    def __del__(self):
-        return f"{self.score}"
+    def _write_to_json(self):
+        if os.stat(PLAYER_SCORE_JSON_PATH).st_size:
+            with open(PLAYER_SCORE_JSON_PATH, 'r', encoding='utf-8') as read_file:
+                data = json.load(read_file)
+                for num, dict in enumerate(data):
+                    if next(iter(dict)) == self.name and (int(dict[next(iter(dict))]) < self.score):
+                        data.pop(num)
+                        data.append({self.name: self.score})
+                        break
+                for num, dict in enumerate(data):
+                    if next(iter(dict)) == self.name:
+                        break
+                else:
+                    data.append({self.name: self.score})
+                
+        else:
+            data = []
+            data.append({self.name: self.score})
+        
+        with open(PLAYER_SCORE_JSON_PATH, 'w', encoding='utf-8') as json_file:
+                json.dump(data, json_file, ensure_ascii=False)
 
 class Saw():
     saw_animation = [pygame.image.load(os.path.join('images\saw', f"{x}.png")) for x in range (1, 5)]
@@ -118,7 +149,7 @@ class Saw():
         self.count += 1
         self.x -=1
     
-    def collide(self, rect):
+    def collide(self, rect: list) -> bool:
         if rect[0] + rect[2] > self.hitbox[0] and rect[0] < self.hitbox[0] + self.hitbox[2]:
             if rect[1] + rect[3] > self.hitbox[1]:
                 return True
@@ -136,7 +167,7 @@ class Spike():
         win.blit(self.spike, (self.x, self.y))
         self.x -=1
 
-    def collide(self, rect):
+    def collide(self, rect: list) -> bool:
         if rect[0] + rect[2] > self.hitbox[0] and rect[0] < self.hitbox[0] + self.hitbox[2]:
             if rect[1] < self.hitbox[3]:
                 return True
@@ -167,7 +198,7 @@ def draw_score(player):
     text = largeFont.render(f"Счёт: {player.score}", 1, (255,255,255))
     screen.blit(text, (600, 10))
 
-def redraw_window(player, obstacles):
+def redraw_window(player, obstacles: list, points_for_obstacle: int):
     move_background()
     
     #draw obstacles
@@ -183,7 +214,7 @@ def redraw_window(player, obstacles):
         
         #add points for passed obstacle
         if obstacle.x + 5 == player.x:
-            player.score += 1
+            player.score += points_for_obstacle
             
     #draw a player action
     draw_player_action = {
@@ -205,31 +236,65 @@ def call_menu(screen):
     menu = pygame_menu.Menu('Добро пожаловать!', WIDTH-300, HEIGHT - 100,
                         theme=pygame_menu.themes.THEME_BLUE)
 
-    menu.add.text_input('Имя персонажа: ', default='Игрок1')
+    menu.add.text_input('Имя персонажа: ', default='Игрок1', maxchar=12, onchange=set_player_name)
     menu.add.selector('Уровень сложности: ', [('Легко', 1), ('Сложно', 2)], onchange=set_difficulty)
     menu.add.button('Играть', start_the_game)
+    menu.add.button('Рекорды', call_record_menu, screen)
     menu.add.button('Выход', pygame_menu.events.EXIT)
 
     menu.mainloop(screen)
+
+def call_record_menu(screen):
+    players_records = Player.get_sorted_list_of_players_records(PLAYER_SCORE_JSON_PATH)
+    records_title = ""
+
+    if 0 < len(players_records):
+        for num, record in enumerate(players_records):
+            if num > 5:
+                break
+            for key, value in record.items():
+                records_title += f"{num+1}.) {key} - {value}\n"
+
+    record_menu = pygame_menu.Menu('Рекорды:', WIDTH-300, HEIGHT - 100,
+                        theme=pygame_menu.themes.THEME_BLUE)
+
+    record_menu.add.label(title=records_title)
+    record_menu.add.button("Назад", record_menu.disable)
+
+    record_menu.mainloop(screen)
+
 
 bg_1 = Background('images/bg.png', [0, 0])
 bg_2 = Background('images/bg.png', [bg_1.image.get_width(), 0])
 
 #game variables
 obstacles = []
-SPEED = 180
+speed = 180
+max_speed = 350
+points_for_obstacle = 1
+player_name = "Игрок1"
 
-def set_difficulty(value, difficulty):
-    global SPEED
+def set_player_name(name: str):
+    global player_name
+    player_name = name
+
+def set_difficulty(value, difficulty: int):
+    global speed, max_speed, points_for_obstacle
     if difficulty == 1:
-        SPEED = 180
+        speed = 180
+        max_speed = 350
+        points_for_obstacle = 1
+        
 
     elif difficulty == 2:
-        SPEED = 270
+        speed = 370
+        max_speed = 440
+        points_for_obstacle = 2
 
 def start_the_game():
     #Class instances
     player = Player()
+    player.name = player_name
 
     #Make timer for events
     speed_event = pygame.USEREVENT + 1
@@ -237,17 +302,18 @@ def start_the_game():
     pygame.time.set_timer(speed_event , 500)
     pygame.time.set_timer(obstacle_event , OBSTACLE_TICKRATE)
 
-    game(SPEED, player, speed_event, obstacle_event)
+    game(speed, max_speed, player, speed_event, obstacle_event, points_for_obstacle)
 
-def game(SPEED, player, speed_event, obstacle_event):
+def game(speed: int, max_speed: int, player, speed_event, obstacle_event, points_for_obstacle: int):
     obstacles = []
+    player._write_to_json()
     while not player.is_dead:
         #game events
         for event in pygame.event.get():
             if event.type == pygame.QUIT: sys.exit()
 
-            if SPEED < 350 and event.type == speed_event:
-                SPEED += 1
+            if speed < max_speed and event.type == speed_event:
+                speed += 1
             
             if event.type == obstacle_event:
                 obstacle_types = [Saw(), Spike()]
@@ -264,9 +330,10 @@ def game(SPEED, player, speed_event, obstacle_event):
             player.count = 0
             player.action = "sliding"
 
-        clock.tick(SPEED)
-        redraw_window(player, obstacles)
+        clock.tick(speed)
+        redraw_window(player, obstacles, points_for_obstacle)
 
+    player._write_to_json()
     time.sleep(2)
 
 if __name__ == "__main__":
