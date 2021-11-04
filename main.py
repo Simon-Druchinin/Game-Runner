@@ -5,8 +5,10 @@ from typing import NoReturn
 from random import randint
 
 import pygame
+import pygame_menu
 
 from SETTINGS import *
+from menu import call_menu
 
 
 pygame.init()
@@ -23,8 +25,8 @@ class Player():
     slide_animation += [pygame.image.load(os.path.join('images\player_slide', f"{x}.png")) for x in range (3, 6)]
     death_animation = pygame.image.load(os.path.join('images', "death.png"))
     jump_list = [1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,0,0,0,0,0,0,0,
-                 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-2,-2,-2,-2,-2,-2,-2,-2,-2,-2,-2,-2,-3,-3,-3,
-                 -3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4]
+                 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-2,-2,-2,-2,-2,-2,-2,-2,-2,-2,-2,-2,-3,-3,-3,
+                 -3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-3,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4]
 
     def __init__(self):
         self.x, self.y = [200, 313]
@@ -36,6 +38,8 @@ class Player():
         self.action = "running"
 
         self.score = 0
+
+        self.hitbox = (self.x+ 4, self.y, self.width-24, self.height-13)
     
     def draw_death(self, screen):
         self.y = 340
@@ -65,7 +69,7 @@ class Player():
         self.hitbox = (self.x+ 4, self.y, self.width-24, self.height-13)
 
     def draw_jump(self, screen):
-        if int(self.count) > 150:
+        if int(self.count) > 153:
             self.count = 0
             self.action = "running"
         self.y -= self.jump_list[self.count]
@@ -92,6 +96,9 @@ class Player():
         
         screen.blit(self.slide_animation[self.count//18], (self.x, self.y))
         self.count += 1
+    
+    def __del__(self):
+        return f"{self.score}"
 
 class Saw():
     saw_animation = [pygame.image.load(os.path.join('images\saw', f"{x}.png")) for x in range (1, 5)]
@@ -148,17 +155,6 @@ class Background(pygame.sprite.Sprite):
             self.rect.x = self.image.get_width()
         self.rect.x -= 1
 
-#Class instances
-player = Player()
-bg_1 = Background('images/bg.png', [0, 0])
-bg_2 = Background('images/bg.png', [bg_1.image.get_width(), 0])
-
-#Make timer for events
-speed_event = pygame.USEREVENT + 1
-obstacle_event = pygame.USEREVENT + 2
-pygame.time.set_timer(speed_event , 500)
-pygame.time.set_timer(obstacle_event , OBSTACLE_TICKRATE)
-
 def move_background():
     screen.fill(BLACK)
     screen.blit(bg_1.image, bg_1.rect)
@@ -201,33 +197,77 @@ def redraw_window(player, obstacles):
     
     pygame.display.update()
 
+def set_difficulty():
+    pass
+
+def call_menu(screen):
+    global menu
+    menu = pygame_menu.Menu('Добро пожаловать!', WIDTH-300, HEIGHT - 100,
+                        theme=pygame_menu.themes.THEME_BLUE)
+
+    menu.add.text_input('Имя персонажа: ', default='Игрок1')
+    menu.add.selector('Уровень сложности: ', [('Легко', 1), ('Сложно', 2)], onchange=set_difficulty)
+    menu.add.button('Играть', start_the_game)
+    menu.add.button('Выход', pygame_menu.events.EXIT)
+
+    menu.mainloop(screen)
+
+bg_1 = Background('images/bg.png', [0, 0])
+bg_2 = Background('images/bg.png', [bg_1.image.get_width(), 0])
+
 #game variables
 obstacles = []
+SPEED = 180
 
-while not player.is_dead:
-    #game events
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT: sys.exit()
+def set_difficulty(value, difficulty):
+    global SPEED
+    if difficulty == 1:
+        SPEED = 180
 
-        if SPEED < 350 and event.type == speed_event:
-            SPEED += 1
+    elif difficulty == 2:
+        SPEED = 270
+
+def start_the_game():
+    #Class instances
+    player = Player()
+
+    #Make timer for events
+    speed_event = pygame.USEREVENT + 1
+    obstacle_event = pygame.USEREVENT + 2
+    pygame.time.set_timer(speed_event , 500)
+    pygame.time.set_timer(obstacle_event , OBSTACLE_TICKRATE)
+
+    game(SPEED, player, speed_event, obstacle_event)
+
+def game(SPEED, player, speed_event, obstacle_event):
+    obstacles = []
+    while not player.is_dead:
+        #game events
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT: sys.exit()
+
+            if SPEED < 350 and event.type == speed_event:
+                SPEED += 1
+            
+            if event.type == obstacle_event:
+                obstacle_types = [Saw(), Spike()]
+                obstacles.append(obstacle_types[randint(0, 1)])
+
+        #player movements
+        keys = pygame.key.get_pressed()
+
+        if (keys[pygame.K_SPACE] or keys[pygame.K_UP] or keys[pygame.K_w]) and player.action == "running":
+            player.count = 0
+            player.action = "jumping"
         
-        if event.type == obstacle_event:
-            obstacle_types = [Saw(), Spike()]
-            obstacles.append(obstacle_types[randint(0, 1)])
+        elif (keys[pygame.K_DOWN] or keys[pygame.K_s]) and player.action == "running":
+            player.count = 0
+            player.action = "sliding"
 
-    #player movements
-    keys = pygame.key.get_pressed()
+        clock.tick(SPEED)
+        redraw_window(player, obstacles)
 
-    if (keys[pygame.K_SPACE] or keys[pygame.K_UP]) and player.action == "running":
-        player.count = 0
-        player.action = "jumping"
-    
-    elif keys[pygame.K_DOWN] and player.action == "running":
-        player.count = 0
-        player.action = "sliding"
+    time.sleep(2)
 
-    clock.tick(SPEED)
-    redraw_window(player, obstacles)
-
-time.sleep(2)
+if __name__ == "__main__":
+    call_menu(screen)

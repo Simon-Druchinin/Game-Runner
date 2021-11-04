@@ -12,7 +12,7 @@ def set_difficulty(value, difficulty: int):
 def start_the_game():
     pass
 
-def call_menu() -> NoReturn:
+def call_menu(screen) -> NoReturn:
     menu = pygame_menu.Menu('Добро пожаловать!', WIDTH-300, HEIGHT - 100,
                         theme=pygame_menu.themes.THEME_BLUE)
 
@@ -21,4 +21,4 @@ def call_menu() -> NoReturn:
     menu.add.button('Играть', start_the_game)
     menu.add.button('Выход', pygame_menu.events.EXIT)
 
-    menu.mainloop(surface)
+    menu.mainloop(screen)
