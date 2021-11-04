@@ -3,7 +3,6 @@ import sys
 import time
 import json
 from random import randint
-from functools import reduce
 
 import pygame
 import pygame_menu
@@ -250,7 +249,7 @@ def call_record_menu(screen):
 
     if 0 < len(players_records):
         for num, record in enumerate(players_records):
-            if num > 5:
+            if num >= 5:
                 break
             for key, value in record.items():
                 records_title += f"{num+1}.) {key} - {value}\n"
@@ -306,7 +305,6 @@ def start_the_game():
 
 def game(speed: int, max_speed: int, player, speed_event, obstacle_event, points_for_obstacle: int):
     obstacles = []
-    player._write_to_json()
     while not player.is_dead:
         #game events
         for event in pygame.event.get():
